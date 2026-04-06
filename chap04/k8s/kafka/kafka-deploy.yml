@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-deploy
+  namespace: metacoding
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      containers:
+        - name: kafka
+          image: confluentinc/cp-kafka:7.5.0
+          ports:
+            # 컨테이너가 노출할 포트 목록
+            - containerPort: 9092 # 클라이언트 통신용 포트 (프로듀서/컨슈머가 연결하는 포트)
+            - containerPort: 9093 # 컨트롤러 통신용 포트 (KRaft 모드에서 내부 통신용)
+          env:
+            # ===== KRaft 모드 설정 =====
+            - name: CLUSTER_ID
+              value: "AbijZYk0QOm5p852kOMSIg" # KAFKA용 UUID 
+            - name: KAFKA_NODE_ID
+              value: "1" # Kafka 노드의 고유 ID (단일 노드이므로 1)
+            - name: KAFKA_PROCESS_ROLES
+              value: "broker,controller" # 이 노드가 브로커와 컨트롤러 역할을 모두 수행
+            - name: KAFKA_CONTROLLER_QUORUM_VOTERS
+              value: "1@kafka-service:9093" # 컨트롤러 투표자 설정 (노드ID@서비스명:포트)
+            # ===== 리스너 설정 =====
+            - name: KAFKA_LISTENERS
+              value: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
+              # Kafka가 수신할 주소와 포트
+              # PLAINTEXT://0.0.0.0:9092: 모든 인터페이스에서 9092 포트로 클라이언트 연결 수신
+              # CONTROLLER://0.0.0.0:9093: 컨트롤러 간 통신용 9093 포트
+            - name: KAFKA_ADVERTISED_LISTENERS
+              value: "PLAINTEXT://kafka-service:9092"
+              # 클라이언트에게 알려줄 주소 (Kubernetes 서비스 이름 사용)
+              # 클라이언트는 이 주소로 연결 시도
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
+              value: "PLAINTEXT" # 브로커 간 통신에 사용할 리스너 이름
+            - name: KAFKA_CONTROLLER_LISTENER_NAMES
+              value: "CONTROLLER" # 컨트롤러 리스너 이름 지정
+            # ===== 기타 설정 =====
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "1"
+              # 오프셋 토픽의 복제 팩터 (단일 노드이므로 1)
+              # 여러 노드가 있으면 3 이상 권장
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "1"
+              # 트랜잭션 상태 로그의 복제 팩터 (단일 노드이므로 1)
+            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "1"
+              # 트랜잭션 상태 로그의 최소 ISR (In-Sync Replicas)
+            - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
+              value: "true"
+              # 존재하지 않는 토픽에 메시지를 보내면 자동으로 토픽 생성
+              # 개발 환경에 유용, 프로덕션에서는 false 권장

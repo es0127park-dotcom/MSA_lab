@@ -1,0 +1,52 @@
+services:
+  user-service:
+    build:
+      context: ./user
+      dockerfile: Dockerfile
+    container_name: user-service
+    ports:
+      - "8083:8083"
+    networks:
+      - msa-network
+
+  product-service:
+    build:
+      context: ./product
+      dockerfile: Dockerfile
+    container_name: product-service
+    ports:
+      - "8082:8082"
+    networks:
+      - msa-network
+
+  order-service:
+    build:
+      context: ./order
+      dockerfile: Dockerfile
+    container_name: order-service
+    ports:
+      - "8081:8081"
+    networks:
+      - msa-network
+    depends_on:
+      - user-service
+      - product-service
+      - delivery-service
+
+  delivery-service:
+    build:
+      context: ./delivery
+      dockerfile: Dockerfile
+    container_name: delivery-service
+    ports:
+      - "8084:8084"
+    networks:
+      - msa-network
+
+networks:
+  msa-network:
+
+
+
+
+

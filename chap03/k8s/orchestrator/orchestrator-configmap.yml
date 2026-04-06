@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orchestrator-configmap
+  namespace: metacoding
+data:
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-service:9092
+

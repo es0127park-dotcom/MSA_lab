@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+</head>
+<body>
+  <h1>고객 화면</h1>
+
+  <p>
+    <label for="tokenInput">토큰</label>
+    <input id="tokenInput" placeholder="JWT 토큰 입력"/>
+  </p>
+
+  <button onclick="createOrder()">주문하기</button>
+
+  <h3 id="status"></h3>
+
+  <script>
+    // 고객 주문 요청 및 주문 완료 실시간 알림
+    const tokenInput = document.getElementById('tokenInput');
+    const status = document.getElementById('status');
+    let stomp = null;
+
+    // JWT에서 회원ID 추출
+    function getUserIdFromToken(token) {
+      try {
+        const payloadPart = token.split('.')[1];   // 가운데 부분이 회원 정보
+        const payload = JSON.parse(atob(payloadPart));  // JSON으로 파싱
+        return parseInt(payload.sub, 10);   // sub가 회원ID
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // 주문 요청 후 WebSocket으로 완료 알림 수신
+    async function createOrder() {
+      const TOKEN = (tokenInput.value || '').trim();
+      if (!TOKEN) {
+        status.textContent = '토큰을 입력해 주세요.';
+        return;
+      }
+
+      const userId = getUserIdFromToken(TOKEN);
+      if (!userId) {
+        status.textContent = '토큰에서 사용자 정보를 읽을 수 없습니다.';
+        return;
+      }
+
+      // 1단계: 아직 연결 안 됐으면 WebSocket 연결하고, 내 주문 알림 받을 토픽 구독
+      if (!stomp || !stomp.connected) {
+        stomp = Stomp.over(new SockJS('/api/ws/orders?token=' + TOKEN));
+        stomp.connect({}, function () {
+          stomp.subscribe('/topic/orders/' + userId, function (msg) {
+            const data = JSON.parse(msg.body);
+            status.textContent = '주문 완료! (주문번호: ' + data.orderId + ')';
+          });
+        });
+        await new Promise(function (r) { setTimeout(r, 500); });
+      }
+
+      // 2단계: 주문 API 호출
+      status.textContent = '주문 요청 중...';
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+        body: JSON.stringify({ orderItems: [{ productId: 1, quantity: 1, price: 2500000 }], address: 'Addr 4' })
+      });
+      if (!res.ok) {
+        status.textContent = '오류 발생';
+      }
+    }
+  </script>
+</body>
+</html>

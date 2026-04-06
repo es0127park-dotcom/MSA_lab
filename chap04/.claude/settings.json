@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/study/book-workflow/projects/처음-만나는-MSA/code/chap03/k8s/**)",
+      "Read(//c/study/book-workflow/projects/처음-만나는-MSA/code/chap03/**)",
+      "Bash(kubectl get:*)"
+    ]
+  }
+}
