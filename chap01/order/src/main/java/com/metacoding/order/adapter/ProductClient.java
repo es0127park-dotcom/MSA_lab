@@ -15,6 +15,8 @@ public class ProductClient {
                 .build();
     }
 
+    // restClient 문법 정리하기!
+    // 외부 마이크로서비스 호출
     public void decreaseQuantity(ProductRequest requestDTO) {
         restClient.put()
                 .uri("/api/products/{productId}/decrease", requestDTO.productId())
@@ -23,6 +25,7 @@ public class ProductClient {
                 .toBodilessEntity();
     }
 
+    // 외부 마이크로서비스 보상트랜잭션 호출
     public void increaseQuantity(ProductRequest requestDTO) {
         restClient.put()
                 .uri("/api/products/{productId}/increase", requestDTO.productId())

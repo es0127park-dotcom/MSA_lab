@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @RequiredArgsConstructor
@@ -21,8 +22,10 @@ public class OrderService {
     @Transactional
     public OrderResponse createOrder(int userId, List<OrderRequest.OrderItemDTO> orderItems, String address) {
         // 보상트랜잭션을 위한 변수 선언
-        boolean productDecreased = false;
+        List<ProductRequest> decreasedProducts = new ArrayList<>();
         boolean deliveryCreated = false;
+
+        // 보상트랜잭션에서 id를 전달해야해서 상위로 빼둠
         Order createdOrder = null;
 
         try {
@@ -30,24 +33,26 @@ public class OrderService {
             createdOrder = orderRepository.save(Order.create(userId));
             final int orderId = createdOrder.getId(); // 스트림에서 사용할 변수
 
-            // 2. 상품 재고 차감
-            orderItems.forEach(item ->productClient.decreaseQuantity(
-                            new ProductRequest(item.productId(),item.quantity(),item.price())));
-            productDecreased = true;
+            // 2. 상품 재고 차감 - 성공한 것만 추적
+            for (OrderRequest.OrderItemDTO item : orderItems) {
+                ProductRequest req = new ProductRequest(item.productId(), item.quantity(), item.price());
+                productClient.decreaseQuantity(req);
+                decreasedProducts.add(req); // 성공한 것만 추가
+            }
 
-            // 3. 주문 아이템 생성 
+            // 3. 주문 아이템 생성
             List<OrderItem> createdOrderItems = orderItems.stream()
-                .map(item -> OrderItem.create(orderId, item.productId(), item.quantity(), item.price()))
-                .toList();
+                    .map(item -> OrderItem.create(orderId, item.productId(), item.quantity(), item.price()))
+                    .toList();
             orderItemRepository.saveAll(createdOrderItems);
 
-            // 4. 배달 생성
+            // 4. 배달 생성 (어댑터)
             deliveryClient.createDelivery(new DeliveryRequest(orderId, address));
             deliveryCreated = true;
 
             // 5. 주문 완료
             createdOrder.complete();
-            return OrderResponse.from(createdOrder,createdOrderItems);
+            return OrderResponse.from(createdOrder, createdOrderItems);
 
         } catch (Exception e) {
             // 배달 취소
@@ -55,12 +60,8 @@ public class OrderService {
                 deliveryClient.cancelDelivery(createdOrder.getId());
             }
 
-            // 재고 복구
-            if (productDecreased) {
-                orderItems.forEach(item -> productClient.increaseQuantity(
-                                new ProductRequest(item.productId(), item.quantity(), item.price())
-                        ));
-            }
+            // 성공한 아이템만 재고 복구
+            decreasedProducts.forEach(req -> productClient.increaseQuantity(req));
             throw new Exception500("주문 생성 중 오류가 발생했습니다: " + e.getMessage());
         }
     }
@@ -77,15 +78,14 @@ public class OrderService {
     public OrderResponse cancelOrder(int orderId) {
         Order findOrder = orderRepository.findById(orderId)
                 .orElseThrow(() -> new Exception404("주문을 찾을 수 없습니다."));
-        if(findOrder.getStatus() == OrderStatus.CANCELLED) {
+        if (findOrder.getStatus() == OrderStatus.CANCELLED) {
             throw new Exception400("주문이 이미 취소되었습니다.");
         }
         List<OrderItem> findOrderItems = orderItemRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new Exception404("주문 아이템을 찾을 수 없습니다."));
         // 상품 재고 복구
         findOrderItems.forEach(item -> productClient.increaseQuantity(
-                new ProductRequest(item.getProductId(), item.getQuantity(), item.getPrice())
-        ));
+                new ProductRequest(item.getProductId(), item.getQuantity(), item.getPrice())));
         // 배달 취소
         deliveryClient.cancelDelivery(orderId);
         // 주문 취소

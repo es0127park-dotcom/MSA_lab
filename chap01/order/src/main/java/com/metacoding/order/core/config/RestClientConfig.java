@@ -10,9 +10,10 @@ public class RestClientConfig {
 
     @Bean
     public RestClient.Builder restClientBuilder() {
+        // 인수 : request는 요청 객체
         ClientHttpRequestInterceptor authForwardingInterceptor = (request, body, execution) -> {
-            ServletRequestAttributes attributes =
-                    (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder
+                    .getRequestAttributes();
             if (attributes != null) {
                 String authorization = attributes.getRequest().getHeader("Authorization");
                 if (authorization != null) {
